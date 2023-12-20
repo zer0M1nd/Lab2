@@ -2,6 +2,7 @@ import sys
 
 import sexp
 import translator
+from minheap import MinHeap
 
 
 def Extend(Stmts, Productions):
@@ -27,9 +28,29 @@ def stripComments(bmFile):
         noComments += line
     return noComments + '\n)'
 
+def calSign(Stmts):
+    count=0
+    for i in Stmts:
+        if type(i)==list:
+            count+=calSign(i)
+        else:
+            count+=1
+    return count
+
+
+class statment(object):
+    def __init__(self,count,stmt):
+        self.count=count
+        self.stmt=stmt
+    def __lt__(self,other):
+        if self.count != other.count:
+            return self.count < other.count
+        else:
+            return len(str(self.stmt))<len(str(self.stmt))
 
 if __name__ == '__main__':
-    benchmarkFile = open(sys.argv[1])
+    #benchmarkFile = open(sys.argv[1])
+    benchmarkFile = open("trivial_impl/max2.sl")
     bm = stripComments(benchmarkFile)
     # print(bm)
     bmExpr = sexp.sexp.parseString(bm, parseAll=True).asList()[0]  # Parse string to python list
@@ -46,7 +67,10 @@ if __name__ == '__main__':
             SynFunExpr = expr
     FuncDefine = ['define-fun'] + SynFunExpr[1:4]  # copy function signature
     # print(FuncDefine)
-    BfsQueue = [[StartSym]]  # Top-down
+    
+    #BfsQueue = [[StartSym]]  # Top-down
+    BfsQueue = MinHeap()
+    BfsQueue.insert(statment(1,[StartSym]))
     Productions = {StartSym: []}
     Type = {StartSym: SynFunExpr[3]}  # set starting symbol's return type
     for NonTerm in SynFunExpr[4]:  # SynFunExpr[4] is the production rules
@@ -57,9 +81,10 @@ if __name__ == '__main__':
         Type[NTName] = NTType
         Productions[NTName] = NonTerm[2]
     Count = 0
-    while len(BfsQueue) != 0:
-        Curr = BfsQueue.pop(0)
-        # print("extend", Curr)
+
+    while not BfsQueue.empty():
+        Curr = BfsQueue.delete_min().stmt
+        print(Curr)
         TryExtend = Extend(Curr, Productions)
         if len(TryExtend) == 0:  # Nothing to
             # print(FuncDefine)
@@ -93,9 +118,11 @@ if __name__ == '__main__':
         TE_set = set()
         for TE in TryExtend:
             TE_str = str(TE)
-            if len(TE_str) <= 50:
+
+            SignCount=calSign(TE)
+            if SignCount <= 10:
                 if TE_str not in TE_set:
-                    BfsQueue.append(TE)
+                    BfsQueue.insert(statment(SignCount,TE))
                     TE_set.add(TE_str)
 
     print(Ans)
