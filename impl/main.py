@@ -93,9 +93,10 @@ if __name__ == '__main__':
         TE_set = set()
         for TE in TryExtend:
             TE_str = str(TE)
-            if not TE_str in TE_set:
-                BfsQueue.append(TE)
-                TE_set.add(TE_str)
+            if len(TE_str) <= 50:
+                if TE_str not in TE_set:
+                    BfsQueue.append(TE)
+                    TE_set.add(TE_str)
 
     print(Ans)
     with open('result.txt', 'w') as f:
