@@ -57,15 +57,17 @@ if __name__ == '__main__':
         Type[NTName] = NTType
         Productions[NTName] = NonTerm[2]
     Count = 0
-    while (len(BfsQueue) != 0):
+    while len(BfsQueue) != 0:
         Curr = BfsQueue.pop(0)
         # print("extend", Curr)
         TryExtend = Extend(Curr, Productions)
-        if (len(TryExtend) == 0):  # Nothing to
+        if len(TryExtend) == 0:  # Nothing to
             # print(FuncDefine)
             # print("find", Curr)
             FuncDefineStr = translator.toString(FuncDefine,
-                                                ForceBracket=True)  # use Force Bracket = True on function definition. MAGIC CODE. DO NOT MODIFY THE ARGUMENT ForceBracket = True.
+                                                ForceBracket=True)
+            # use Force Bracket = True on function definition. MAGIC CODE. DO NOT MODIFY THE ARGUMENT ForceBracket = True.
+
             CurrStr = translator.toString(Curr)
             # SynFunResult = FuncDefine+Curr
             # Str = translator.toString(SynFunResult)
@@ -81,7 +83,7 @@ if __name__ == '__main__':
             # print '1'
             counterexample = checker.check(Str)
             # print counterexample
-            if (counterexample == None):  # No counter-example
+            if counterexample is None:  # No counter-example
                 Ans = Str
                 break
             # print '2'
