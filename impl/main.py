@@ -46,11 +46,11 @@ class statment(object):
         if self.count != other.count:
             return self.count < other.count
         else:
-            return len(str(self.stmt))<len(str(self.stmt))
+            return len(str(self.stmt))<len(str(other.stmt))
 
 if __name__ == '__main__':
     #benchmarkFile = open(sys.argv[1])
-    benchmarkFile = open("trivial_impl/max2.sl")
+    benchmarkFile = open("trivial_impl/tutorial.sl")
     bm = stripComments(benchmarkFile)
     # print(bm)
     bmExpr = sexp.sexp.parseString(bm, parseAll=True).asList()[0]  # Parse string to python list
@@ -120,7 +120,7 @@ if __name__ == '__main__':
             TE_str = str(TE)
 
             SignCount=calSign(TE)
-            if SignCount <= 10:
+            if SignCount <= 12:
                 if TE_str not in TE_set:
                     BfsQueue.insert(statment(SignCount,TE))
                     TE_set.add(TE_str)
