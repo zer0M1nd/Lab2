@@ -44,6 +44,8 @@ def toString(Expr, Bracket=True, ForceBracket=False):
         return Expr
     if type(Expr) == tuple:
         return constToString(Expr[0], Expr[1])
+    if Expr==None:
+        return None
     if Expr[0] == "BitVec":
         return "(_ BitVec " + str(Expr[1][1]) + ")"
     subexpr = []
@@ -66,60 +68,66 @@ def toString(Expr, Bracket=True, ForceBracket=False):
     else:
         return "(%s)" % (' '.join(subexpr))
 
-    # Declare Target Function
 class SynFunction:
-    def __init__(self, SynFunExpr):
-        self.name = SynFunExpr[1]
-        # TODO: arg and ret sort
-        self.argList = SynFunExpr[2]
-        self.retSort = SynFunExpr[3]
-        self.Sorts = []
-        for expr in self.argList:
-            self.Sorts.append(getSort(expr[1]))
-        self.Sorts.append(getSort(self.retSort))
-        self.targetFunction = Function('__TARGET_FUNCTION__', *(self.Sorts))
-
+        def __init__(self, SynFunExpr):
+            self.name = SynFunExpr[1]
+            # TODO: arg and ret sort
+            self.argList = SynFunExpr[2]
+            self.retSort = SynFunExpr[3]
+            self.Sorts = []
+            for expr in self.argList:
+                self.Sorts.append(getSort(expr[1]))
+            self.Sorts.append(getSort(self.retSort))
+            self.targetFunction = Function('__TARGET_FUNCTION__', *(self.Sorts))
 
 class Checker:
-    def __init__(self, VarTable, synFunction, Constraints, AuxFuns):
+        def __init__(self, VarTable, synFunction, Constraints, AuxFuns,TransTable,SynFunExpr):
 
-        self.VarTable = VarTable
+            self.VarTable = VarTable
+            self.synFunction = synFunction
+            self.TransTable = TransTable
+            self.Constraints = Constraints
+            self.AuxFuns = AuxFuns            
+            self.SynFunExpr = SynFunExpr
+            self.CounterExamples = []
+            self.solver = Solver()
 
-        self.synFunction = synFunction
+        def check(self, funcDefStr):
+            self.solver.push()
 
-        self.Constraints = Constraints
+            spec_smt2 = self.AuxFuns + [funcDefStr]
+            for constraint in self.Constraints:
+                spec_smt2.append('(assert %s)' % (toString(constraint[1:])))
+            spec_smt2 = '\n'.join(spec_smt2)
+            spec = parse_smt2_string(spec_smt2, decls=dict(self.VarTable))
+            spec = And(spec)
+            for i in self.CounterExamples:
+                if i.eval(Not(spec)):
+                    return i
 
-        self.AuxFuns = AuxFuns
+            self.solver.add(Not(spec))
+            if verbose:
+                print("spec:", spec)
+            res = self.solver.check()
+            if res == unsat:
+                self.solver.pop()
+                return None
+            else:
+                model = self.solver.model()
+                self.solver.pop()
+                self.CounterExamples.append(model)
+                return model
 
-        self.solver = Solver()
-
-    def check(self, funcDefStr):
-        self.solver.push()
-
-        spec_smt2 = self.AuxFuns + [funcDefStr]
-        for constraint in self.Constraints:
-            spec_smt2.append('(assert %s)' % (toString(constraint[1:])))
-        spec_smt2 = '\n'.join(spec_smt2)
-        spec = parse_smt2_string(spec_smt2, decls=dict(self.VarTable))
-        spec = And(spec)
-        self.solver.add(Not(spec))
-        if verbose:
-            print("spec:", spec)
-        res = self.solver.check()
-        if res == unsat:
-            self.solver.pop()
-            return None
-        else:
-            model = self.solver.model()
-            self.solver.pop()
-            return model
 
 def ReadQuery(bmExpr):
     SynFunExpr = []
     VarDecMap = {}
     Constraints = []
     FunDefMap = {}
-    AuxFuns = []
+    AuxFuns = []    
+    TransTable = {}
+    VarDecList = []
+
     for expr in bmExpr:
         if len(expr) == 0:
             continue
@@ -127,11 +135,20 @@ def ReadQuery(bmExpr):
             SynFunExpr = expr
         elif expr[0] == 'declare-var':
             VarDecMap[expr[1]] = expr
+            VarDecList.append(expr[1])
         elif expr[0] == 'constraint':
             Constraints.append(expr)
         elif expr[0] == 'define-fun':
             FunDefMap[expr[1]] = expr
             AuxFuns.append(toString(expr, ForceBracket=True))
+
+    argument = SynFunExpr[2]    
+
+    if len(VarDecList) == len(argument):
+        for i in range(len(VarDecList)):
+            var = VarDecList[i]
+            arg = argument[i][0]
+            TransTable[var] = arg
 
     if verbose:
         print(SynFunExpr)
@@ -144,7 +161,11 @@ def ReadQuery(bmExpr):
     for var in VarDecMap:
         VarTable[var] = DeclareVar(VarDecMap[var][2], var)
 
+    # Declare Target Function
+    
 
     synFunction = SynFunction(SynFunExpr)
-    checker = Checker(VarTable, synFunction, Constraints, AuxFuns)
+
+
+    checker = Checker(VarTable, synFunction, Constraints, AuxFuns, TransTable, SynFunExpr)
     return checker

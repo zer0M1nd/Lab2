@@ -4,6 +4,8 @@ import sexp
 import translator
 from minheap import MinHeap
 
+from pbc import LIA_Constrain
+
 
 def Extend(Stmts, Productions):
     ret = []
@@ -50,27 +52,28 @@ class statment(object):
 
 if __name__ == '__main__':
     #benchmarkFile = open(sys.argv[1])
-    benchmarkFile = open("trivial_impl/tutorial.sl")
+    benchmarkFile = open(r"judge\global\tests\lia\S1.sl")
     bm = stripComments(benchmarkFile)
-    # print(bm)
+    logic_type = "BV" if "(set-logic BV)" in bm else "LIA"
+
     bmExpr = sexp.sexp.parseString(bm, parseAll=True).asList()[0]  # Parse string to python list
-    # pprint.pprint(bmExpr)
     checker = translator.ReadQuery(bmExpr)
-    # print (checker.check('(define-fun f ((x Int)) Int (mod (* x 3) 10)  )'))
-    # raw_input()
-    SynFunExpr = []
+    SynFunExpr = checker.SynFunExpr
+
     StartSym = 'My-Start-Symbol'  # virtual starting symbol
-    for expr in bmExpr:
-        if len(expr) == 0:
-            continue
-        elif expr[0] == 'synth-fun':
-            SynFunExpr = expr
-    FuncDefine = ['define-fun'] + SynFunExpr[1:4]  # copy function signature
-    # print(FuncDefine)
     
+    FuncDefine = ['define-fun'] + SynFunExpr[1:4]
+    FuncDefineStr=translator.toString(FuncDefine,ForceBracket=True)
+    
+    func_args=[SynFunExpr[1]]
+    for i in SynFunExpr[2]:
+        func_args.append(i[0])
+    var_symbol=[]
+    var_symbol.append([item[0] for item in SynFunExpr[2]])
+    var_symbol.append([item[0] for item in SynFunExpr[4]])
+
     #BfsQueue = [[StartSym]]  # Top-down
-    BfsQueue = MinHeap()
-    BfsQueue.insert(statment(1,[StartSym]))
+
     Productions = {StartSym: []}
     Type = {StartSym: SynFunExpr[3]}  # set starting symbol's return type
     for NonTerm in SynFunExpr[4]:  # SynFunExpr[4] is the production rules
@@ -80,50 +83,68 @@ if __name__ == '__main__':
             Productions[StartSym].append(NTName)
         Type[NTName] = NTType
         Productions[NTName] = NonTerm[2]
-    Count = 0
+    
+    lia=LIA_Constrain(checker.Constraints,func_args,checker.TransTable,checker.SynFunExpr,logic_type,var_symbol)
+    cur=translator.toString(lia.final_expr)
+    flag=True
+    if cur !=None:
+        str_syn = FuncDefineStr[:-1]+' ' + cur+FuncDefineStr[-1]
 
-    while not BfsQueue.empty():
-        Curr = BfsQueue.delete_min().stmt
-        print(Curr)
-        TryExtend = Extend(Curr, Productions)
-        if len(TryExtend) == 0:  # Nothing to
-            # print(FuncDefine)
-            # print("find", Curr)
-            FuncDefineStr = translator.toString(FuncDefine,
-                                                ForceBracket=True)
-            # use Force Bracket = True on function definition. MAGIC CODE. DO NOT MODIFY THE ARGUMENT ForceBracket = True.
+        try:
+            example=checker.check(str_syn)
+            if (example == None):
+                Ans = str_syn
+                flag = False
+        except:
+            pass
 
-            CurrStr = translator.toString(Curr)
-            # SynFunResult = FuncDefine+Curr
-            # Str = translator.toString(SynFunResult)
-            Str = FuncDefineStr[:-1] + ' ' + CurrStr + FuncDefineStr[
-                -1]  # insert Program just before the last bracket ')'
-            Count += 1
-            # print (Count)
-            # print (Str)
-            # if Count % 100 == 1:
-            # print (Count)
-            # print (Str)
-            # raw_input()
-            # print '1'
-            counterexample = checker.check(Str)
-            # print counterexample
-            if counterexample is None:  # No counter-example
-                Ans = Str
-                break
-            # print '2'
-        # print(TryExtend)
-        # raw_input()
-        # BfsQueue+=TryExtend
+    if flag:
+        Count = 0
+        BfsQueue = MinHeap()
+        BfsQueue.insert(statment(1,[StartSym]))
         TE_set = set()
-        for TE in TryExtend:
-            TE_str = str(TE)
+        while not BfsQueue.empty():
+            Curr = BfsQueue.delete_min().stmt
+            #print(Curr)
+            TryExtend = Extend(Curr, Productions)
+            if len(TryExtend) == 0:  # Nothing to
+                # print(FuncDefine)
+                # print("find", Curr)
+                FuncDefineStr = translator.toString(FuncDefine,
+                                                    ForceBracket=True)
+                # use Force Bracket = True on function definition. MAGIC CODE. DO NOT MODIFY THE ARGUMENT ForceBracket = True.
 
-            SignCount=calSign(TE)
-            if SignCount <= 12:
-                if TE_str not in TE_set:
-                    BfsQueue.insert(statment(SignCount,TE))
-                    TE_set.add(TE_str)
+                CurrStr = translator.toString(Curr)
+                # SynFunResult = FuncDefine+Curr
+                # Str = translator.toString(SynFunResult)
+                Str = FuncDefineStr[:-1] + ' ' + CurrStr + FuncDefineStr[
+                    -1]  # insert Program just before the last bracket ')'
+                Count += 1
+                # print (Count)
+                # print (Str)
+                # if Count % 100 == 1:
+                # print (Count)
+                # print (Str)
+                # raw_input()
+                # print '1'
+                counterexample = checker.check(Str)
+                # print counterexample
+                if counterexample is None:  # No counter-example
+                    Ans = Str
+                    break
+                # print '2'
+            # print(TryExtend)
+            # raw_input()
+            # BfsQueue+=TryExtend
+
+            for TE in TryExtend:
+                TE_str = str(TE)
+
+                SignCount=calSign(TE)
+                if SignCount <= 12:
+                    if TE_str not in TE_set:
+                        BfsQueue.insert(statment(SignCount,TE))
+                        TE_set.add(TE_str)
 
     print(Ans)
     with open('result.txt', 'w') as f:
