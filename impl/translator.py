@@ -66,6 +66,53 @@ def toString(Expr, Bracket=True, ForceBracket=False):
     else:
         return "(%s)" % (' '.join(subexpr))
 
+    # Declare Target Function
+class SynFunction:
+    def __init__(self, SynFunExpr):
+        self.name = SynFunExpr[1]
+        # TODO: arg and ret sort
+        self.argList = SynFunExpr[2]
+        self.retSort = SynFunExpr[3]
+        self.Sorts = []
+        for expr in self.argList:
+            self.Sorts.append(getSort(expr[1]))
+        self.Sorts.append(getSort(self.retSort))
+        self.targetFunction = Function('__TARGET_FUNCTION__', *(self.Sorts))
+
+
+class Checker:
+    def __init__(self, VarTable, synFunction, Constraints, AuxFuns):
+
+        self.VarTable = VarTable
+
+        self.synFunction = synFunction
+
+        self.Constraints = Constraints
+
+        self.AuxFuns = AuxFuns
+
+        self.solver = Solver()
+
+    def check(self, funcDefStr):
+        self.solver.push()
+
+        spec_smt2 = self.AuxFuns + [funcDefStr]
+        for constraint in self.Constraints:
+            spec_smt2.append('(assert %s)' % (toString(constraint[1:])))
+        spec_smt2 = '\n'.join(spec_smt2)
+        spec = parse_smt2_string(spec_smt2, decls=dict(self.VarTable))
+        spec = And(spec)
+        self.solver.add(Not(spec))
+        if verbose:
+            print("spec:", spec)
+        res = self.solver.check()
+        if res == unsat:
+            self.solver.pop()
+            return None
+        else:
+            model = self.solver.model()
+            self.solver.pop()
+            return model
 
 def ReadQuery(bmExpr):
     SynFunExpr = []
@@ -97,54 +144,7 @@ def ReadQuery(bmExpr):
     for var in VarDecMap:
         VarTable[var] = DeclareVar(VarDecMap[var][2], var)
 
-    # Declare Target Function
-    class SynFunction:
-        def __init__(self, SynFunExpr):
-            self.name = SynFunExpr[1]
-            # TODO: arg and ret sort
-            self.argList = SynFunExpr[2]
-            self.retSort = SynFunExpr[3]
-            self.Sorts = []
-            for expr in self.argList:
-                self.Sorts.append(getSort(expr[1]))
-            self.Sorts.append(getSort(self.retSort))
-            self.targetFunction = Function('__TARGET_FUNCTION__', *(self.Sorts))
 
     synFunction = SynFunction(SynFunExpr)
-
-    class Checker:
-        def __init__(self, VarTable, synFunction, Constraints, AuxFuns):
-
-            self.VarTable = VarTable
-
-            self.synFunction = synFunction
-
-            self.Constraints = Constraints
-
-            self.AuxFuns = AuxFuns
-
-            self.solver = Solver()
-
-        def check(self, funcDefStr):
-            self.solver.push()
-
-            spec_smt2 = self.AuxFuns + [funcDefStr]
-            for constraint in Constraints:
-                spec_smt2.append('(assert %s)' % (toString(constraint[1:])))
-            spec_smt2 = '\n'.join(spec_smt2)
-            spec = parse_smt2_string(spec_smt2, decls=dict(self.VarTable))
-            spec = And(spec)
-            self.solver.add(Not(spec))
-            if verbose:
-                print("spec:", spec)
-            res = self.solver.check()
-            if res == unsat:
-                self.solver.pop()
-                return None
-            else:
-                model = self.solver.model()
-                self.solver.pop()
-                return model
-
     checker = Checker(VarTable, synFunction, Constraints, AuxFuns)
     return checker
