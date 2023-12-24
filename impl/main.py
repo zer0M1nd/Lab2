@@ -50,9 +50,33 @@ class statment(object):
         else:
             return len(str(self.stmt))<len(str(other.stmt))
 
+def convert(expr,SignSet):
+    for i in range(len(expr)):
+        if expr[i]=='ite':
+            if isinstance(expr[i+1],list):
+                if expr[i+1][0]=='and' and 'and' not in SignSet:
+                    innerexpr=['ite',expr[i+1][2],expr[i+2],expr[i+3]]
+                    expr=expr[:(i+1)]+[expr[i+1][1]]+[innerexpr]+expr[i+3:]
+                elif expr[i+1][0]=='>' and '>' not in SignSet:
+                    innerexpr=['<=',expr[i+1][1],expr[i+1][2]]
+                    expr=expr[:(i+1)]+[innerexpr]+[expr[i+3]]+[expr[i+2]]+expr[i+4:]
+                elif expr[i+1][0]=='<' and '<' not in SignSet:
+                    innerexpr=['>=',expr[i+1][1],expr[i+1][2]]
+                    expr=expr[:(i+1)]+[innerexpr]+[expr[i+3]]+[expr[i+2]]+expr[i+4:]
+                elif expr[i+1][0]=='<=' and '<=' not in SignSet:
+                    innerexpr=['>',expr[i+1][1],expr[i+1][2]]
+                    expr=expr[:(i+1)]+[innerexpr]+[expr[i+3]]+[expr[i+2]]+expr[i+4:]
+                elif expr[i+1][0]=='>=' and '>=' not in SignSet:
+                    innerexpr=['<',expr[i+1][1],expr[i+1][2]]
+                    expr=expr[:(i+1)]+[innerexpr]+[expr[i+3]]+[expr[i+2]]+expr[i+4:]
+        if isinstance(expr[i],list):
+            expr=expr[:i]+[convert(expr[i],SignSet)]+expr[i+1:]
+    return expr
+
+
 if __name__ == '__main__':
-    #benchmarkFile = open(sys.argv[1])
-    benchmarkFile = open(r"judge\global\tests\lia\S1.sl")
+    benchmarkFile = open(sys.argv[1])
+    #benchmarkFile = open(r"judge\global\tests\lia\array_search_3.sl")
     bm = stripComments(benchmarkFile)
     logic_type = "BV" if "(set-logic BV)" in bm else "LIA"
 
@@ -73,7 +97,7 @@ if __name__ == '__main__':
     var_symbol.append([item[0] for item in SynFunExpr[4]])
 
     #BfsQueue = [[StartSym]]  # Top-down
-
+    SignSet=set()
     Productions = {StartSym: []}
     Type = {StartSym: SynFunExpr[3]}  # set starting symbol's return type
     for NonTerm in SynFunExpr[4]:  # SynFunExpr[4] is the production rules
@@ -83,13 +107,21 @@ if __name__ == '__main__':
             Productions[StartSym].append(NTName)
         Type[NTName] = NTType
         Productions[NTName] = NonTerm[2]
-    
+        for i in NonTerm[2]:
+            if isinstance(i,list):
+                SignSet.add(i[0])
+    #print(SignSet)
     lia=LIA_Constrain(checker.Constraints,func_args,checker.TransTable,checker.SynFunExpr,logic_type,var_symbol)
+    if lia.final_expr !=None:
+        lia.final_expr=convert(lia.final_expr,SignSet)
+    #print(lia.final_expr)
     cur=translator.toString(lia.final_expr)
     flag=True
     if cur !=None:
+        #print(FuncDefineStr)
+        #print(cur)
         str_syn = FuncDefineStr[:-1]+' ' + cur+FuncDefineStr[-1]
-
+        print(str_syn)
         try:
             example=checker.check(str_syn)
             if (example == None):
